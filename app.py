@@ -6,7 +6,7 @@ import pandas as pd
 import os
 import json
 import numpy as np
-import whisper
+#import whisper
 import requests
 from datetime import datetime
 #from konlpy.tag import Okt
@@ -139,48 +139,48 @@ def get_log():
 
 # 음성 인식 기능
 # 서버 기준 실행 경로
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-AUDIO_DIR = os.path.join(BASE_DIR, "temp_audio")
-os.makedirs(AUDIO_DIR, exist_ok=True)
-model = whisper.load_model("base")
+# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# AUDIO_DIR = os.path.join(BASE_DIR, "temp_audio")
+# os.makedirs(AUDIO_DIR, exist_ok=True)
+# model = whisper.load_model("base")
 
-@app.route('/to_text', methods=['POST'])
-def speech_to_text():
-    if 'audio' not in request.files:    # audio 파일이 없을 때
-        return {'error': 'Audio file must be exist.'}, 400
+# @app.route('/to_text', methods=['POST'])
+# def speech_to_text():
+#     if 'audio' not in request.files:    # audio 파일이 없을 때
+#         return {'error': 'Audio file must be exist.'}, 400
 
-    audio_file = request.files['audio']
-    filename = audio_file.filename or "temp.wav"
-    save_path = os.path.join(AUDIO_DIR, filename)
-    audio_file.save(save_path)
+#     audio_file = request.files['audio']
+#     filename = audio_file.filename or "temp.wav"
+#     save_path = os.path.join(AUDIO_DIR, filename)
+#     audio_file.save(save_path)
 
-    try:   # 음성 인식
-        result = model.transcribe(save_path)
-        text = result["text"].strip()
+#     try:   # 음성 인식
+#         result = model.transcribe(save_path)
+#         text = result["text"].strip()
 
-        # GLOSS 자동 요청
-        gloss = []
-        try:
-            res = requests.post("http://localhost:5000/to_gloss", json={"text": text})
-            if res.status_code == 200:
-                gloss = res.json().get("gloss", [])
-        except:
-            gloss = ["GLOSS 변환 실패"]
+#         # GLOSS 자동 요청
+#         gloss = []
+#         try:
+#             res = requests.post("http://localhost:5000/to_gloss", json={"text": text})
+#             if res.status_code == 200:
+#                 gloss = res.json().get("gloss", [])
+#         except:
+#             gloss = ["GLOSS 변환 실패"]
 
-        # 로그 기록
-        with open("speech_log.jsonl", "a", encoding="utf-8") as f:
-            log = {
-                "input_file": filename,
-                "output_text": text,
-                "gloss:": gloss,
-                "timestamp": datetime.now().isoformat()
-            }
-            f.write(json.dumps(log, ensure_ascii=False) + "\n")
+#         # 로그 기록
+#         with open("speech_log.jsonl", "a", encoding="utf-8") as f:
+#             log = {
+#                 "input_file": filename,
+#                 "output_text": text,
+#                 "gloss:": gloss,
+#                 "timestamp": datetime.now().isoformat()
+#             }
+#             f.write(json.dumps(log, ensure_ascii=False) + "\n")
 
-        return jsonify({"text": text})
+#         return jsonify({"text": text})
     
-    except Exception as e:  # 음성 인식 실패(예외 처리)  
-        return {'error': str(e)}, 500
+#     except Exception as e:  # 음성 인식 실패(예외 처리)  
+#         return {'error': str(e)}, 500
 
 
 # okt = Okt()
