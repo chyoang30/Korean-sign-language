@@ -6,8 +6,8 @@ import pandas as pd
 import os
 import json
 import numpy as np
-#import whisper
-import requests
+# import whisper
+# import requests
 from datetime import datetime
 #from konlpy.tag import Okt
 from dotenv import load_dotenv
