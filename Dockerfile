@@ -8,14 +8,16 @@ RUN apt-get update && \
 
 # 3. 프로젝트 파일 복사
 WORKDIR /app
-COPY . /app
 
-# 4. Python 패키지 설치
+# requirements 설치
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. 포트 설정 (Railway에서 8080 사용)
-ENV PORT=8080
-EXPOSE 8080
+# Whisper 설치 (requirements에 포함해도 되지만 명시적으로도 가능)
+# RUN pip install git+https://github.com/openai/whisper.git
 
-# 6. Flask 앱 실행
+# 앱 코드 복사
+COPY . .
+
+# 서버 실행
 CMD ["python", "app.py"]
