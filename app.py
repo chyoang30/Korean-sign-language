@@ -11,7 +11,7 @@ import json
 import numpy as np
 import logging
 logging.basicConfig(level=logging.DEBUG)
-import whisper
+# import whisper
 # import requests
 from datetime import datetime
 #from konlpy.tag import Okt
