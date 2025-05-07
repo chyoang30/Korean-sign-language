@@ -2,6 +2,8 @@
 
 from flask import Flask, send_file, request, make_response, jsonify
 from urllib.parse import unquote
+from moviepy.editor import VideoFileClip, concatenate_videoclips
+import uuid
 import pandas as pd
 import os
 import json
@@ -81,6 +83,34 @@ def get_video_sequence():
 
     return jsonify({"videos": video_urls})
 
+@app.route('/combine_videos', methods=['POST'])
+def combine_videos():
+    data = request.get_json()
+    words = data.get("words", [])
+
+    if not words or not isinstance(words, list):
+        return {"error": "단어 리스트가 필요합니다."}, 400
+
+    video_paths = []
+    for word in words:
+        filename = word_to_file.get(word)
+        if filename:
+            path = os.path.join(VIDEO_FOLDER, filename + ".mp4")
+            if os.path.exists(path):
+                video_paths.append(path)
+
+    if not video_paths:
+        return {"error": "영상이 없습니다."}, 404
+
+    # 병합
+    clips = [VideoFileClip(p) for p in video_paths]
+    final = concatenate_videoclips(clips)
+    output_name = f"merged_{uuid.uuid4().hex[:8]}.mp4"
+    output_path = os.path.join("temp_videos", output_name)
+    final.write_videofile(output_path, codec="libx264", audio_codec="aac")
+
+    return send_file(output_path, mimetype='video/mp4')
+
 
 @app.route('/to_speech', methods=['POST'])  # 자연어처리 GLOSS >> 구어
 def to_speech():
@@ -92,7 +122,7 @@ def to_speech():
     if not words or not isinstance(words, list):
         return {'error': 'words는 리스트여야 합니다.'}, 400
 
-    # GPT 요청
+    # 요청
     prompt = f"다음은 청각장애인이 역무원에게 수어로 표현한 단어(GLOSS) 리스트야 {words}\n이 단어들을 바탕으로, 역무원에게 전달할 수 있는 자연스러운 한국어 문장으로 바꿔줘."
     
     try:
