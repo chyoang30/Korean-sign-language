@@ -199,6 +199,9 @@ def get_log():
 #     except Exception as e:
 #         return jsonify({"error": str(e)}), 500
 
+AUDIO_DIR = "./uploads"
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
 @app.route("/upload", methods=['POST'])
 def upload():
     if 'file' not in request.files:
