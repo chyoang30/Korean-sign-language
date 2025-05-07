@@ -11,7 +11,7 @@ import json
 import numpy as np
 import logging
 logging.basicConfig(level=logging.DEBUG)
-# import whisper
+import whisper
 # import requests
 from datetime import datetime
 #from konlpy.tag import Okt
@@ -61,30 +61,6 @@ def get_video():
         response = make_response(json.dumps(response_data, ensure_ascii=False))
         response.headers['Content-Type'] = 'application/json; charset=utf-8'
         return response, 404
-    
-@app.route('/get_video_sequence', methods=['POST'])
-def get_video_sequence():
-    data = request.get_json()
-    words = data.get("words", [])
-    
-    if not words or not isinstance(words, list):
-        return jsonify({"error": "단어 리스트가 필요합니다."}), 400
-
-    video_urls = []
-
-    for word in words:
-        word = unquote(word)
-        if word in word_to_file:
-            filename = word_to_file[word] + '.mp4'
-            file_path = os.path.join(VIDEO_FOLDER, filename)
-            if os.path.exists(file_path):
-                # 정적 URL을 리턴 (프론트가 이 URL로 각 영상 요청 가능)
-                video_urls.append(f"/get_video?word={word}")
-
-    if not video_urls:
-        return jsonify({"error": "일치하는 영상이 없습니다."}), 404
-
-    return jsonify({"videos": video_urls})
 
 @app.route('/combine_videos', methods=['POST'])
 def combine_videos():
@@ -198,67 +174,55 @@ def get_log():
 # BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # AUDIO_DIR = os.path.join(BASE_DIR, "temp_audio")
 # os.makedirs(AUDIO_DIR, exist_ok=True)
-# model = whisper.load_model("base")
+
+# # 음성 인식 모델 로드
+# model = whisper.load_model("base")  # 모델 로드
 
 # @app.route('/to_text', methods=['POST'])
-# def speech_to_text():
-#     if 'audio' not in request.files:    # audio 파일이 없을 때
-#         return {'error': 'Audio file must be exist.'}, 400
-
+# def to_text():
+#     if 'audio' not in request.files:
+#         return  jsonify({"error": "audio 파일이 필요합니다."}), 400
+    
 #     audio_file = request.files['audio']
 #     filename = audio_file.filename or "temp.wav"
 #     save_path = os.path.join(AUDIO_DIR, filename)
 #     audio_file.save(save_path)
 
-#     try:   # 음성 인식
-#         result = model.transcribe(save_path)
-#         text = result["text"].strip()
-
-#         # GLOSS 자동 요청
-#         gloss = []
-#         try:
-#             res = requests.post("http://localhost:5000/to_gloss", json={"text": text})
-#             if res.status_code == 200:
-#                 gloss = res.json().get("gloss", [])
-#         except:
-#             gloss = ["GLOSS 변환 실패"]
-
-#         # 로그 기록
-#         with open("speech_log.jsonl", "a", encoding="utf-8") as f:
-#             log = {
-#                 "input_file": filename,
-#                 "output_text": text,
-#                 "gloss:": gloss,
-#                 "timestamp": datetime.now().isoformat()
-#             }
-#             f.write(json.dumps(log, ensure_ascii=False) + "\n")
-
-#         return jsonify({"text": text})
-    
-#     except Exception as e:  # 음성 인식 실패(예외 처리)  
-#         return {'error': str(e)}, 500
-
-
-# okt = Okt()
-
-# @app.route('/to_gloss', methods=['POST'])
-# def to_gloss():
 #     try:
-#         data = request.get_json()
-#         text = data.get("text", "")
+#         result = model.transcribe(save_path)
+#         text = result['text'].strip()
 
-#         if not text:
-#             return jsonify({"error": "텍스트가 제공되지 않았습니다."}), 400
-
-#         # 형태소 분석 후 명사/동사/형용사만 추출
-#         tokens = okt.pos(text, stem=True)
-#         gloss = [word for word, tag in tokens if tag in ['Noun', 'Verb', 'Adjective']]
-
-#         return jsonify({"gloss": gloss})
+#         return jsonify({
+#             "text": text,
+#             "timestamps": datatime.now().isoformat()
+#         })
 #     except Exception as e:
 #         return jsonify({"error": str(e)}), 500
-    
 
+@app.route("/upload", methods=['POST'])
+def upload():
+    if 'file' not in request.files:
+        return jsonify({"error": "파일이 필요합니다."}), 400
+
+    file = request.files['file']
+    filename = file.filename or "temp.mp4"
+    save_path = os.path.join(AUDIO_DIR, filename)
+    file.save(save_path)
+
+    try:
+        # 파일 처리 로직 추가(AI 모델 로직 등)
+        # result = AI 모델 과정()
+        return jsonify({
+            "message": "file uploaded successfully",
+            "filename": filename,
+            # "Result": result  # AI 모델 결과 추가
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# if __name__ == "__main__":
+#     app.run(debug=True)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))  # 기본값 5000, 환경변수 우선
