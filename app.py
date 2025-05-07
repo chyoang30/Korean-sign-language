@@ -1,9 +1,10 @@
 # app.py 테스트 서버 열어보기
 
-from flask import Flask, send_file, request, make_response, jsonify
+from flask import Flask, send_file, request, make_response, jsonify, after_this_request
 from urllib.parse import unquote
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 import uuid
+import tempfile
 import pandas as pd
 import os
 import json
@@ -85,6 +86,7 @@ def get_video_sequence():
 
 @app.route('/combine_videos', methods=['POST'])
 def combine_videos():
+     # (1) 입력 단어 받아서 영상 파일 리스트 생성
     data = request.get_json()
     words = data.get("words", [])
 
@@ -101,15 +103,26 @@ def combine_videos():
 
     if not video_paths:
         return {"error": "영상이 없습니다."}, 404
+    
+    # (2) 임시 파일 경로 생성
+    temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    temp_path = temp.name
+    temp.close()
 
-    # 병합
+    # (3) 영상 병합
     clips = [VideoFileClip(p) for p in video_paths]
     final = concatenate_videoclips(clips)
-    output_name = f"merged_{uuid.uuid4().hex[:8]}.mp4"
-    output_path = os.path.join("temp_videos", output_name)
-    final.write_videofile(output_path, codec="libx264", audio_codec="aac")
+    final.write_videofile(temp_path, codec="libx264", audio_codec="aac")
 
-    return send_file(output_path, mimetype='video/mp4')
+    @after_this_request
+    def remove_file(response):
+        try:
+            os.remove(temp_path)
+        except Exception as e:
+            app.logger.warning(f"임시 파일 삭제 실패: {e}")
+        return response
+
+    return send_file(temp_path, mimetype="video/mp4")
 
 
 @app.route('/to_speech', methods=['POST'])  # 자연어처리 GLOSS >> 구어
