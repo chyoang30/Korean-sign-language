@@ -109,7 +109,8 @@ def combine_videos():
     list_path = f"/tmp/video_list_{uuid.uuid4().hex[:8]}.txt"
     with open(list_path, "w", encoding="utf-8") as f:
         for path in input_paths:
-            f.write(f"file '{path}'\n")
+            abs_path = os.path.abspath(path)
+            f.write(f"file '{abs_path}'\n")
 
     output_path = f"/tmp/merged_{uuid.uuid4().hex[:8]}.mp4"
 
@@ -121,8 +122,9 @@ def combine_videos():
             .run(overwrite_output=True)
         )
     except ffmpeg.Error as e:
-        print(f"[FFmpeg 오류] {e.stderr.decode()}")
-        return jsonify({"error": "영상 병합 실패"}), 500
+        err_msg = e.stderr.decode() if e.stderr else "FFmpeg unknown error"
+        print(f"[FFmpeg 오류] {err_msg}")
+        return jsonify({"error": "영상 병합 실패", "detail": err_msg}), 500
 
     @after_this_request
     def cleanup(response):
