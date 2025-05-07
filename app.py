@@ -9,6 +9,8 @@ import pandas as pd
 import os
 import json
 import numpy as np
+import logging
+logging.basicConfig(level=logging.DEBUG)
 # import whisper
 # import requests
 from datetime import datetime
@@ -86,43 +88,48 @@ def get_video_sequence():
 
 @app.route('/combine_videos', methods=['POST'])
 def combine_videos():
-     # (1) 입력 단어 받아서 영상 파일 리스트 생성
-    data = request.get_json()
-    words = data.get("words", [])
+    try:
+        data = request.get_json()
+        words = data.get("words", [])
 
-    if not words or not isinstance(words, list):
-        return {"error": "단어 리스트가 필요합니다."}, 400
+        if not words or not isinstance(words, list):
+            return {"error": "단어 리스트가 필요합니다."}, 400
 
-    video_paths = []
-    for word in words:
-        filename = word_to_file.get(word)
-        if filename:
+        video_paths = []
+        for word in words:
+            filename = word_to_file.get(word)
+            if not filename:
+                print(f"[단어 없음] {word}")
+                continue
             path = os.path.join(VIDEO_FOLDER, filename + ".mp4")
             if os.path.exists(path):
                 video_paths.append(path)
+            else:
+                print(f"[파일 없음] {path}")
 
-    if not video_paths:
-        return {"error": "영상이 없습니다."}, 404
-    
-    # (2) 임시 파일 경로 생성
-    temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-    temp_path = temp.name
-    temp.close()
+        if not video_paths:
+            return {"error": "영상이 없습니다."}, 404
 
-    # (3) 영상 병합
-    clips = [VideoFileClip(p) for p in video_paths]
-    final = concatenate_videoclips(clips)
-    final.write_videofile(temp_path, codec="libx264", audio_codec="aac")
+        print(f"[병합할 파일들] {video_paths}")
 
-    @after_this_request
-    def remove_file(response):
-        try:
-            os.remove(temp_path)
-        except Exception as e:
-            app.logger.warning(f"임시 파일 삭제 실패: {e}")
-        return response
+        clips = [VideoFileClip(p) for p in video_paths]
+        final = concatenate_videoclips(clips)
+        output_path = f"/tmp/merged_{uuid.uuid4().hex[:8]}.mp4"
+        final.write_videofile(output_path, codec="libx264", audio_codec="aac")
 
-    return send_file(temp_path, mimetype="video/mp4")
+        @after_this_request
+        def remove_file(response):
+            try:
+                os.remove(output_path)
+            except Exception as e:
+                print(f"[파일 삭제 실패] {e}")
+            return response
+
+        return send_file(output_path, mimetype="video/mp4")
+
+    except Exception as e:
+        print(f"[서버 에러] {str(e)}")
+        return {"error": str(e)}, 500
 
 
 @app.route('/to_speech', methods=['POST'])  # 자연어처리 GLOSS >> 구어
