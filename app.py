@@ -2,7 +2,7 @@
 
 from flask import Flask, send_file, request, make_response, jsonify, after_this_request
 from urllib.parse import unquote
-from moviepy.editor import VideoFileClip, concatenate_videoclips
+import ffmpeg
 import uuid
 import tempfile
 import pandas as pd
@@ -88,48 +88,52 @@ def get_video_sequence():
 
 @app.route('/combine_videos', methods=['POST'])
 def combine_videos():
-    try:
-        data = request.get_json()
-        words = data.get("words", [])
+    data = request.get_json()
+    words = data.get("words", [])
 
-        if not words or not isinstance(words, list):
-            return {"error": "단어 리스트가 필요합니다."}, 400
+    if not words or not isinstance(words, list):
+        return jsonify({"error": "단어 리스트가 필요합니다."}), 400
 
-        video_paths = []
-        for word in words:
-            filename = word_to_file.get(word)
-            if not filename:
-                print(f"[단어 없음] {word}")
-                continue
+    input_paths = []
+    for word in words:
+        filename = word_to_file.get(word)
+        if filename:
             path = os.path.join(VIDEO_FOLDER, filename + ".mp4")
             if os.path.exists(path):
-                video_paths.append(path)
-            else:
-                print(f"[파일 없음] {path}")
+                input_paths.append(path)
 
-        if not video_paths:
-            return {"error": "영상이 없습니다."}, 404
+    if not input_paths:
+        return jsonify({"error": "일치하는 영상이 없습니다."}), 404
 
-        print(f"[병합할 파일들] {video_paths}")
+    # 병합용 리스트 파일 생성
+    list_path = f"/tmp/video_list_{uuid.uuid4().hex[:8]}.txt"
+    with open(list_path, "w", encoding="utf-8") as f:
+        for path in input_paths:
+            f.write(f"file '{path}'\n")
 
-        clips = [VideoFileClip(p) for p in video_paths]
-        final = concatenate_videoclips(clips)
-        output_path = f"/tmp/merged_{uuid.uuid4().hex[:8]}.mp4"
-        final.write_videofile(output_path, codec="libx264", audio_codec="aac")
+    output_path = f"/tmp/merged_{uuid.uuid4().hex[:8]}.mp4"
 
-        @after_this_request
-        def remove_file(response):
-            try:
-                os.remove(output_path)
-            except Exception as e:
-                print(f"[파일 삭제 실패] {e}")
-            return response
+    try:
+        (
+            ffmpeg
+            .input(list_path, format='concat', safe=0)
+            .output(output_path, c='copy')
+            .run(overwrite_output=True)
+        )
+    except ffmpeg.Error as e:
+        print(f"[FFmpeg 오류] {e.stderr.decode()}")
+        return jsonify({"error": "영상 병합 실패"}), 500
 
-        return send_file(output_path, mimetype="video/mp4")
+    @after_this_request
+    def cleanup(response):
+        try:
+            os.remove(output_path)
+            os.remove(list_path)
+        except:
+            pass
+        return response
 
-    except Exception as e:
-        print(f"[서버 에러] {str(e)}")
-        return {"error": str(e)}, 500
+    return send_file(output_path, mimetype='video/mp4')
 
 
 @app.route('/to_speech', methods=['POST'])  # 자연어처리 GLOSS >> 구어
