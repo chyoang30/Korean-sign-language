@@ -59,10 +59,35 @@
 - 성공 (200 OK): 해당 단어의 수어 영상 mp4 파일 반환  
 - 실패 (404, 502): 오류 메시지 반환  
   - `404`: 단어에 대한 영상 없음  
-  - `404`: 파일이 존재하지 않음  
+  - `404`: 파일이 존재하지 않음
   - `502`: 서버 응답 실패
 
-### 2. 자연어처리 문장 생성 API
+### 2. 수어 영상 병합 API
+#### 요청
+- **Method**: POST
+- **Endpoint**: `\combine_video`
+- **Request Body (JSON)**:
+```json
+{
+  "words": ["여기", "위험"]
+}
+```
+- 또는 아래처럼 curl로 요청할 수 있습니다:
+  ```bash
+  curl -X POST https://flask-sign-language-api-production.up.railway.app/combine_videos \
+       -H "Content-Type: application/json" \
+       -d '{"words": ["여기", "위험"]}' --output combined.mp4
+  ```
+
+#### 응답
+- **성공 (200 OK)**: 병합된 수어 영상(mp4 파일) 반환
+- **실패**
+  - `400 Bad Request`: 요청 형식 오류
+  - `404 Not Found`: 일부 단어에 해당하는 영상이 존재하지 않음
+  - `500 Internal Server Error`: 병합 처리 중 오류 발생 (ffmpeg 등)
+
+
+### 3. 자연어처리 문장 생성 API
 #### 요청
 - **Method**: POST  
 - **Endpoint**: `/to_speech`  
@@ -72,6 +97,7 @@
     "words": ["배", "아프다"]
   }
   ```
+  - 또는 아래처럼 curl로 요청할 수 있습니다:
   ```bash
   curl -X POST https://flask-sign-language-api-production.up.railway.app/to_speech -H "Content-Type: application/json" -d "@test.json"
   ```
