@@ -72,11 +72,11 @@
   "words": ["여기", "위험"]
 }
 ```
-- 또는 아래처럼 curl로 요청할 수 있습니다:
+- 아래처럼 curl로 요청할 수 있습니다:
   ```bash
   curl -X POST https://flask-sign-language-api-production.up.railway.app/combine_videos \
-       -H "Content-Type: application/json" \
-       -d '{"words": ["여기", "위험"]}' --output combined.mp4
+      -H "Content-Type: application/json" \
+      --data-binary "@test.json" --output combined.mp4
   ```
 
 #### 응답
