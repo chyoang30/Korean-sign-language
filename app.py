@@ -2,7 +2,10 @@
 
 from flask import Flask, send_file, request, make_response, jsonify, after_this_request
 from urllib.parse import unquote
+import torch
+import cv2
 import ffmpeg
+import shutil
 import uuid
 import tempfile
 import pandas as pd
@@ -11,12 +14,12 @@ import json
 import numpy as np
 import logging
 logging.basicConfig(level=logging.DEBUG)
-# import whisper
-# import requests
 from datetime import datetime
-#from konlpy.tag import Okt
+from lib.model.sign_model import SignModel
+from lib.dataset.vocabulary import GlossVocabulary
 from dotenv import load_dotenv
 from openai import OpenAI
+from PIL import Image
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -28,10 +31,6 @@ word_to_file = dict(zip(df['Kor'], df['Filename']))
 
 VIDEO_FOLDER = 'videos'
 
-@app.route('/ping')     # 테스트
-def ping():
-    return 'pong'
-
 @app.route('/get_video')    # 영상 조회
 def get_video():
     word = request.args.get('word')
@@ -40,23 +39,19 @@ def get_video():
     print(f"[요청 받은 단어] {word}")
     
     if word in word_to_file:
+
         filename = word_to_file[word] + '.mp4'
         file_path = os.path.join(VIDEO_FOLDER, filename)
 
-        print(f"[찾은 파일명] {filename}")
-        print(f"[파일 경로] {file_path}")
-
         if os.path.exists(file_path):
-            print("[파일 있음! 전송 시작]")
             return send_file(file_path, mimetype='video/mp4')
+        
         else:
-            print("[파일 없음 404]")
             response_data = {'error': '파일이 없습니다.'}
             response = make_response(json.dumps(response_data, ensure_ascii=False))
             response.headers['Content-Type'] = 'application/json; charset=utf-8'
             return response, 404
     else:
-        print("[단어 없음 404]")
         response_data = {'error': '단어가 없습니다.'}
         response = make_response(json.dumps(response_data, ensure_ascii=False))
         response.headers['Content-Type'] = 'application/json; charset=utf-8'
@@ -77,6 +72,7 @@ def combine_videos():
             path = os.path.join(VIDEO_FOLDER, filename + ".mp4")
             if os.path.exists(path):
                 input_paths.append(path)
+
 
     if not input_paths:
         return jsonify({"error": "일치하는 영상이 없습니다."}), 404
@@ -168,39 +164,125 @@ def get_log():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/to_gloss', methods=['POST'])  # 구어 >> GLOSS
+def to_gloss():
+    data = request.get_json()
+    sentence = data.get('sentence')  # 예: "화장실이 어디예요?"
 
-# 음성 인식 기능
-# 서버 기준 실행 경로
-# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# AUDIO_DIR = os.path.join(BASE_DIR, "temp_audio")
-# os.makedirs(AUDIO_DIR, exist_ok=True)
+    if not sentence or not isinstance(sentence, str):
+        return {'error': 'sentence는 문자열이어야 합니다.'}, 400
 
-# # 음성 인식 모델 로드
-# model = whisper.load_model("base")  # 모델 로드
+    prompt = f"""다음 문장은 청각장애인이 역무원에게 한 질문이야: "{sentence}".
+이 문장에서 불필요한 조사와 어미를 제거하고 핵심 수어 단어(GLOSS) 리스트로 만들어줘.
+예시처럼 단어만 리스트로 출력해. 예: "배가 아파요" → ["배", "아프다"]"""
 
-# @app.route('/to_text', methods=['POST'])
-# def to_text():
-#     if 'audio' not in request.files:
-#         return  jsonify({"error": "audio 파일이 필요합니다."}), 400
-    
-#     audio_file = request.files['audio']
-#     filename = audio_file.filename or "temp.wav"
-#     save_path = os.path.join(AUDIO_DIR, filename)
-#     audio_file.save(save_path)
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            temperature=0.0,
+            messages=[
+                {"role": "system", "content": "주어진 문장을 바탕으로 핵심 단어만 남긴 GLOSS 리스트를 출력하세요. 조사, 어미 등은 제거하고, 문법보다 의미 중심으로 구성하세요. 결과는 리스트 형식으로 출력하세요."},
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-#     try:
-#         result = model.transcribe(save_path)
-#         text = result['text'].strip()
+        gloss_list_str = response.choices[0].message.content.strip()
+        # 문자열을 파이썬 리스트로 안전하게 변환
+        gloss_list = json.loads(gloss_list_str)
 
-#         return jsonify({
-#             "text": text,
-#             "timestamps": datatime.now().isoformat()
-#         })
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
+        return jsonify({"gloss": gloss_list})
+
+    except Exception as e:
+        return {'error': str(e)}, 500
+
 
 AUDIO_DIR = "./uploads"
 os.makedirs(AUDIO_DIR, exist_ok=True)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+checkpoint = torch.load("model_best.pth.tar", map_location=DEVICE, weights_only=False)
+# vocab_list = checkpoint.get("vocab", None)
+with open("vocab.txt", encoding="utf-8") as f:
+    vocab_list = [line.strip() for line in f if line.strip()]
+vocab = GlossVocabulary(tokens=vocab_list)
+model = SignModel(vocab)  # 정확한 초기화 인자는 sign_model.py 참고
+model.load_state_dict(checkpoint["state_dict"])
+model.to(DEVICE).eval()
+
+# 전처리 함수
+def preprocess(frames):
+    frames = frames / 255.0
+    frames = frames.astype(np.float32)
+    frames = np.transpose(frames, (0, 3, 1, 2))  # (T, C, H, W)
+    frames = np.expand_dims(frames, axis=0)      # (1, T, C, H, W)
+    return torch.tensor(frames).to(DEVICE)
+
+# 프레임 추출 함수
+def extract_frames(video_path, fps=30):
+    cap = cv2.VideoCapture(video_path)
+    frames = []
+    frame_count = 0
+    interval = int(cap.get(cv2.CAP_PROP_FPS) / fps) or 1
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if frame_count % interval == 0:
+            resized = cv2.resize(frame, (224, 224))
+            frames.append(resized)
+        frame_count += 1
+
+    cap.release()
+    return np.array(frames)
+
+# 프레임 이미지 추출 함수
+def extract_video_to_images(video_path, output_dir, fps=30):
+    os.makedirs(output_dir, exist_ok=True)
+
+    cap = cv2.VideoCapture(video_path)
+    original_fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_interval = int(round(original_fps / fps)) if original_fps > fps else 1
+
+    frame_count = 0
+    saved_count = 0
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if frame_count % frame_interval == 0:
+            filename = os.path.join(output_dir, f"{saved_count:04d}.jpg")
+            cv2.imwrite(filename, frame)
+            saved_count += 1
+        frame_count += 1
+
+    cap.release()
+    print(f"Saved {saved_count} frames to {output_dir}")
+
+# 이미지 → 텐서 변환 함수
+def load_images_as_tensor(image_dir):
+    image_files = sorted([f for f in os.listdir(image_dir) if f.endswith(".jpg")])
+    frames = []
+
+    for filename in image_files:
+        img_path = os.path.join(image_dir, filename)
+        img = Image.open(img_path).convert("RGB")
+        img = img.resize((224, 224))
+        frame = np.array(img)
+        frames.append(frame)
+
+    return preprocess(np.array(frames))
+
+# 추론 함수
+def run_inference(model, vocab, video_tensor):
+    with torch.no_grad():
+        output = model(video_tensor)  # (B, T//4, V)
+        print("[DEBUG] output.shape:", output.shape)
+        pred = output.argmax(dim=-1).cpu().numpy()[0]  # (T//4,)
+        print("[DEBUG] pred indices:", pred)
+        glosses = vocab.arrays_to_sentences([pred])[0]
+        print("[DEBUG] glosses:", glosses)
+        return glosses
 
 @app.route("/upload", methods=['POST'])
 def upload():
@@ -213,20 +295,39 @@ def upload():
     file.save(save_path)
 
     try:
-        # 파일 처리 로직 추가(AI 모델 로직 등)
-        # result = AI 모델 과정()
+        # 1. mp4 → 이미지 프레임 저장
+        tmp_dir = os.path.join("temp_frames", uuid.uuid4().hex[:8])
+        extract_video_to_images(save_path, tmp_dir)
+
+        # 2. 이미지 폴더 → 텐서 변환
+        input_tensor = load_images_as_tensor(tmp_dir)
+
+        # 3. 추론
+        glosses = run_inference(model, vocab, input_tensor)
+
+        # 4. 임시 프레임 폴더 정리 (after_this_request)
+        # @after_this_request
+        # def cleanup(response):
+        #     try:
+        #         shutil.rmtree(tmp_dir)
+        #         os.remove(save_path)
+        #     except Exception as e:
+        #         print(f"Cleanup error: {e}")
+        #     return response
+
         return jsonify({
             "message": "file uploaded successfully",
             "filename": filename,
-            # "Result": result  # AI 모델 결과 추가
+            "glosses": glosses
         })
+    
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# if __name__ == "__main__":
+# if __name__ == "__main__":    # 로컬 테스트용
 #     app.run(debug=True)
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # 배포용
     port = int(os.environ.get('PORT', 5000))  # 기본값 5000, 환경변수 우선
     app.run(debug=False, host='0.0.0.0', port=port)
