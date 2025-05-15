@@ -167,9 +167,13 @@ def to_gloss():
     if not sentence or not isinstance(sentence, str):
         return {'error': 'sentence는 문자열이어야 합니다.'}, 400
 
-    prompt = f"""다음 문장은 청각장애인이 역무원에게 한 질문이야: "{sentence}".
-이 문장에서 불필요한 조사와 어미를 제거하고 핵심 수어 단어(GLOSS) 리스트로 만들어줘.
-예시처럼 단어만 리스트로 출력해. 예: "배가 아파요" → ["배", "아프다"]"""
+    prompt = f"""
+    문장을 의미 중심의 GLOSS 리스트로 바꿔줘. 
+    조사, 어미, 인칭, 부가 설명은 전부 제거하고 핵심 단어만 남겨.
+    예시처럼 단어만 리스트로 출력해. 예: "배가 아파요" → ["배", "아프다"]
+
+    문장: "{sentence}"
+    """
 
     try:
         response = client.chat.completions.create(
