@@ -36,4 +36,4 @@ requests
 ffmpeg-python
 Pillow
 torch
-cv2
+opencv-python-headless
