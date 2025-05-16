@@ -36,3 +36,4 @@ requests
 ffmpeg-python
 Pillow
 torch
+cv2
