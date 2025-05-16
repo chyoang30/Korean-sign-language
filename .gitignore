@@ -5,3 +5,6 @@ __pycache__/
 *.log
 output_test.json
 *.wav
+model_best.pth.tar
+*.jsonl
+*.json  
