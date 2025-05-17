@@ -1,9 +1,0 @@
-# .railwayignore
-.git/
-*.mp4
-venv/
-__pycache__/
-*.csv
-*.jsonl
-*.json
-.videos/
