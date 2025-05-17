@@ -9,7 +9,6 @@ RUN apt-get update && \
 # 3. 프로젝트 파일 복사
 WORKDIR /app
 COPY . /app
-COPY model_best.pth.tar .
 
 # 4. Python 패키지 설치
 RUN pip install --no-cache-dir -r requirements.txt
