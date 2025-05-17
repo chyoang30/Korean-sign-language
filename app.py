@@ -193,7 +193,7 @@ def upload_proxy():
 
     try:
         # ngrok 주소 사용
-        resp = requests.post("https://2968-210-96-144-146.ngrok-free.app/upload", files=files)
+        resp = requests.post("https://245f-222-239-67-152.ngrok-free.app/upload", files=files)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify({"error": f"로컬 추론 서버 호출 실패: {e}"}), 500
