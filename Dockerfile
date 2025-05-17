@@ -11,7 +11,13 @@ RUN apt-get update && apt-get install -y \
 
 # 3. 프로젝트 디렉토리 설정 및 파일 복사
 WORKDIR /app
-COPY . .  # 여기에 model_best.pth.tar도 포함되므로 아래 COPY 생략 가능
+COPY app.py .
+COPY requirements.txt .
+COPY lib/ lib/
+COPY vocab.txt .
+
+# 모델 파일 다운로드 (Google Drive 링크 사용)
+RUN curl -L -o model_best.pth.tar "https://drive.google.com/uc?export=download&id=1I9ZRRzUUpb8i1cW0Q5vtVxebhuBdO8f5"
 
 # 4. Python 패키지 설치
 RUN pip install --no-cache-dir -r requirements.txt

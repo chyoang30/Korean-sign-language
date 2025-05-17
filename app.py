@@ -5,9 +5,6 @@ from urllib.parse import unquote
 import ffmpeg
 import uuid
 import pandas as pd
-import cv2
-import shutil
-import torch
 import os
 import json
 import numpy as np
@@ -18,8 +15,6 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 from PIL import Image
-from lib.model.sign_model import SignModel
-from lib.dataset.vocabulary import GlossVocabulary
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -186,137 +181,27 @@ def to_gloss():
         return {'error': str(e)}, 500
 
 
-AUDIO_DIR = "./uploads"
-os.makedirs(AUDIO_DIR, exist_ok=True)
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-checkpoint = torch.load("model_best.pth.tar", map_location=DEVICE, weights_only=False)
-# vocab_list = checkpoint.get("vocab", None)
-with open("vocab.txt", encoding="utf-8") as f:
-    vocab_list = [line.strip() for line in f if line.strip()]
-vocab = GlossVocabulary(tokens=vocab_list)
-model = SignModel(vocab)
-model.load_state_dict(checkpoint["state_dict"])
-model.to(DEVICE).eval()
+import requests
 
-# 전처리 함수
-def preprocess(frames):
-    frames = frames / 255.0
-    frames = frames.astype(np.float32)
-    frames = np.transpose(frames, (0, 3, 1, 2))  # (T, C, H, W)
-    frames = np.expand_dims(frames, axis=0)      # (1, T, C, H, W)
-    return torch.tensor(frames).to(DEVICE)
-
-# 프레임 추출 함수
-def extract_frames(video_path, fps=30):
-    cap = cv2.VideoCapture(video_path)
-    frames = []
-    frame_count = 0
-    interval = int(cap.get(cv2.CAP_PROP_FPS) / fps) or 1
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if frame_count % interval == 0:
-            resized = cv2.resize(frame, (224, 224))
-            frames.append(resized)
-        frame_count += 1
-
-    cap.release()
-    return np.array(frames)
-
-# 프레임 이미지 추출 함수
-def extract_video_to_images(video_path, output_dir, fps=30):
-    os.makedirs(output_dir, exist_ok=True)
-
-    cap = cv2.VideoCapture(video_path)
-    original_fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_interval = int(round(original_fps / fps)) if original_fps > fps else 1
-
-    frame_count = 0
-    saved_count = 0
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if frame_count % frame_interval == 0:
-            filename = os.path.join(output_dir, f"{saved_count:04d}.jpg")
-            cv2.imwrite(filename, frame)
-            saved_count += 1
-        frame_count += 1
-
-    cap.release()
-    print(f"Saved {saved_count} frames to {output_dir}")
-
-# 이미지 → 텐서 변환 함수
-def load_images_as_tensor(image_dir):
-    image_files = sorted([f for f in os.listdir(image_dir) if f.endswith(".jpg")])
-    frames = []
-
-    for filename in image_files:
-        img_path = os.path.join(image_dir, filename)
-        img = Image.open(img_path).convert("RGB")
-        img = img.resize((224, 224))
-        frame = np.array(img)
-        frames.append(frame)
-
-    return preprocess(np.array(frames))
-
-# 추론 함수
-def run_inference(model, vocab, video_tensor):
-    with torch.no_grad():
-        output = model(video_tensor)  # (B, T//4, V)
-        print("[DEBUG] output.shape:", output.shape)
-        pred = output.argmax(dim=-1).cpu().numpy()[0]  # (T//4,)
-        print("[DEBUG] pred indices:", pred)
-        glosses = vocab.arrays_to_sentences([pred])[0]
-        print("[DEBUG] glosses:", glosses)
-        return glosses
-
-@app.route("/upload", methods=['POST'])
-def upload():
+@app.route("/upload", methods=["POST"])
+def upload_proxy():
     if 'file' not in request.files:
         return jsonify({"error": "파일이 필요합니다."}), 400
 
     file = request.files['file']
-    filename = file.filename or "temp.mp4"
-    save_path = os.path.join(AUDIO_DIR, filename)
-    file.save(save_path)
+    files = {'file': (file.filename, file.stream, file.mimetype)}
 
     try:
-        # 1. mp4 → 이미지 프레임 저장
-        tmp_dir = os.path.join("temp_frames", uuid.uuid4().hex[:8])
-        extract_video_to_images(save_path, tmp_dir)
-
-        # 2. 이미지 폴더 → 텐서 변환
-        input_tensor = load_images_as_tensor(tmp_dir)
-
-        # 3. 추론
-        glosses = run_inference(model, vocab, input_tensor)
-
-        # 4. 임시 프레임 폴더 정리 (after_this_request)
-        @after_this_request
-        def cleanup(response):
-            try:
-                shutil.rmtree(tmp_dir)
-                os.remove(save_path)
-            except Exception as e:
-                print(f"Cleanup error: {e}")
-            return response
-
-        return jsonify({
-            "message": "file uploaded successfully",
-            "filename": filename,
-            "glosses": glosses
-        })
-    
+        # ngrok 주소 사용
+        resp = requests.post("https://2968-210-96-144-146.ngrok-free.app/upload", files=files)
+        return jsonify(resp.json())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"로컬 추론 서버 호출 실패: {e}"}), 500
 
-if __name__ == "__main__":    # 로컬 테스트용
-    app.run(debug=True)
 
-# if __name__ == '__main__':  # 배포용
-#     port = int(os.environ.get('PORT', 5000))  # 기본값 5000, 환경변수 우선
-#     app.run(debug=False, host='0.0.0.0', port=port)
+# if __name__ == "__main__":    # 로컬 테스트용
+#     app.run(debug=True)
+
+if __name__ == '__main__':  # 배포용
+    port = int(os.environ.get('PORT', 5000))  # 기본값 5000, 환경변수 우선
+    app.run(debug=False, host='0.0.0.0', port=port)
