@@ -30,7 +30,11 @@
 
 ## 주요 기능
 - 검색어(`word`)에 해당하는 수어 영상을 조회하고 mp4 파일로 반환합니다.
-- gloss 형태의 단어 리스트(예: `["배", "아프다"]`)를 받아 자연어 문장(예: `"배가 아파요"`)으로 변환합니다.
+- 여러 단어(`words`)에 해당하는 수어 영상을 병합하여 하나의 mp4 파일로 반환합니다.
+- gloss 형태의 단어 리스트(`words`, 예: `["배", "아프다"]`)를 받아 자연어 문장(예: `"배가 아파요"`)으로 변환합니다.
+- 일상 한국어 문장(`sentence`)을 입력받아 핵심 의미만 남긴 GLOSS 단어 리스트로 변환합니다.
+- 수어 영상(`.mp4`)을 업로드하면 해당 영상에서 GLOSS 단어 리스트를 추출해 반환합니다.
+- 수어 영상(`.mp4`)을 업로드하면 GLOSS를 추출하고 자연어 문장으로 자동 변환하여 함께 반환합니다.
 
 ---
 
@@ -99,7 +103,9 @@
   ```
   - 또는 아래처럼 curl로 요청할 수 있습니다:
   ```bash
-  curl -X POST https://flask-sign-language-api-production.up.railway.app/to_speech -H "Content-Type: application/json" -d "@test.json"
+  curl -X POST https://flask-sign-language-api-production.up.railway.app/to_speech \
+      -H "Content-Type: application/json" \
+      -d "@test.json"
   ```
 
 #### 응답
@@ -116,17 +122,101 @@
   ```
 
 - 실패 (400, 500): 오류 메시지 반환
-  - 400: 요청 형식 오류
-  - 500: OpenAI 처리 중 오류
+  - ``400 Bad Request``: 요청 형식 오류
+  - `500 Internal Server Error`: OpenAI 처리 중 오류
+
+
+### 4. GLOSS 변환 API
+#### 요청
+- **Method**: POST  
+- **Endpoint**: `/to_gloss`  
+- **Request Body (JSON)**:  
+  ```json
+  {
+    "sentence": "화장실이 어디예요?"
+  }
+  ```
+  - 아래처럼 curl로 요청할 수 있습니다:
+  ```bash
+  curl -X POST https://flask-sign-language-api-production.up.railway.app/to_gloss -H "Content-Type: application/json" -d "@test.json"
+  ```
+
+  #### 응답
+- 성공 (200 OK): gloss 형태의 단어 리스트 반환
+  ```json
+  {
+    "gloss": ["화장실", "어디"]
+  }
+  ```
+
+- 실패 (400, 500): 오류 메시지 반환
+  - `400 Bad Request`: 요청 형식 오류
+  - `500 Internal Server Error`: OpenAI 처리 중 오류
+
+### 5. GLOSS 추출 API
+#### 설명
+- 수어 영상(mp4)을 업로드하면 해당 영상에서 GLOSS 단어 리스트를 추출합니다.
+#### 요청
+- **Method**: POST  
+- **Endpoint**: `/upload`  
+- **Form-Data**:
+  - file: `.mp4` 형식 수어 영상
+  - 아래처럼 curl로 요청할 수 있습니다:
+  ```bash
+  curl -X POST https://flask-sign-language-api-production.up.railway.app/upload \
+      -F "file=@test.mp4"
+  ```
+#### 응답
+- 성공 (200 OK): gloss 형태의 단어 리스트 반환
+  ```json
+  {
+    "message": "file uploaded successfully",
+    "filename": "test3.mp4",
+    "glosses": ["배", "아프다"]
+  }
+  ```
+
+- 실패 (400, 500): 오류 메시지 반환
+  - `400 Bad Request`: 파일 누락
+  - `500 Internal Server Error`: 로컬 추론 서버 호출 실패
+
+### 6. 문장 생성 통합 API
+#### 설명
+- 수어 영상(mp4)을 업로드하면 GLOSS를 추출하고 자연어 문장을 함께 반환합니다.
+- (`/upload` + `/to_speech` 결합 기능)
+#### 요청
+- **Method**: POST  
+- **Endpoint**: `/generate_sentence`  
+- **Form-Data**:
+  - file: `.mp4` 형식 수어 영상
+  - 아래처럼 curl로 요청할 수 있습니다:
+  ```bash
+  curl -X POST https://flask-sign-language-api-production.up.railway.app/generate_sentence \
+      -F "file=@test.mp4"
+  ```
+#### 응답
+- 성공 (200 OK): gloss 형태의 단어 리스트와 완성된 sentence 
+  ```json
+  {
+    "gloss": ["배", "아프다"],
+    "sentence": "배가 아파요."
+  }
+  ```
+
+- 실패 (400, 500): 오류 메시지 반환
+  - `400 Bad Request`: 파일 누락
+  - `500 Internal Server Error`: 로컬 추론 서버 호출 또는 gloss 추출 실패
 
 ---
 
 ## 주의사항
-- API의 `word` 파라미터는 한글 문자열로 정확히 입력하고, URL 인코딩에 유의하세요.  
-  (예: `위험` → `word=위험`)
-- 제공되는 모든 수어 영상은 연구 및 학습용으로만 사용 가능합니다.
-- - `/to_speech` 요청은 JSON 형식의 단어 리스트를 POST 방식으로 보내야 합니다.
-- 단어 리스트는 공백 없는 단일 형태소 단어 기준으로 구성되어야 정확한 문장 변환이 가능합니다.
+- `/get_video`, `/combine_videos` API의 `word`, `words` 파라미터는 **정확한 한글 문자열**로 입력해야 하며, **URL 인코딩**에 유의하세요. (예: `위험` → `word=위험`)
+- `/to_speech`, `/to_gloss` API는 **JSON 형식의 요청 본문**을 받아야 하며, 필드 이름과 자료형을 정확히 맞춰야 합니다.
+- `words` 리스트는 **공백 없는 단일 형태소 단어** 기준으로 구성해야 정확한 문장 생성 및 변환이 가능합니다. (예: `"배가"` → `["배"]`, `"아프다"` → 유지)
+- `/upload`, `/generate_sentence` API는 **mp4 형식의 영상 파일**을 `file` 필드로 업로드해야 하며,  
+  파일이 없거나 형식이 맞지 않으면 오류가 발생합니다.
+- `/generate_sentence`는 내부적으로 `/upload`와 `/to_speech`를 자동 호출하므로, 업로드한 영상의 품질이나 길이에 따라 처리 시간이 다소 소요될 수 있습니다.
+- 모든 수어 영상 및 생성 문장은 **비상업적 연구 및 학습용**으로만 사용 가능합니다.
 
 ---
 
