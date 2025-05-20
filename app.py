@@ -17,7 +17,6 @@ from openai import OpenAI
 from PIL import Image
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-NGROK_URL = os.getenv("NGROK_URL")
 
 app = Flask(__name__)
 
@@ -192,7 +191,7 @@ def upload_proxy():
 
     try:
         # ngrok 주소 사용
-        resp = requests.post(f"{NGROK_URL}/upload", files=files)
+        resp = requests.post("https://d354-218-150-183-121.ngrok-free.app/upload", files=files)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify({"error": f"로컬 추론 서버 호출 실패: {e}"}), 500
@@ -221,7 +220,7 @@ def upload_proxy():
 #         return {'error': str(e)}, 500
 
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
 #   app.run(debug=True)   # 로컬 테스트용
     
     port = int(os.environ.get('PORT', 5000))  # 배포용
