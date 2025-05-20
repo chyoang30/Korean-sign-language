@@ -209,7 +209,7 @@ def generate_sentence():
     if "error" in gloss_result:
         return jsonify({"error": gloss_result["error"]}), 500
 
-    gloss = gloss_result.get("gloss")
+    gloss = gloss_result.get("glosses")
     if not gloss:
         return jsonify({"error": "GLOSS 추출 실패"}), 500
 
@@ -226,7 +226,7 @@ def generate_sentence():
 
 
 if __name__ == "__main__":
-#   app.run(debug=True)   # 로컬 테스트용
+    app.run(debug=True)   # 로컬 테스트용
     
-    port = int(os.environ.get('PORT', 5000))  # 배포용
-    app.run(debug=False, host='0.0.0.0', port=port)
+    # port = int(os.environ.get('PORT', 5000))  # 배포용
+    # app.run(debug=False, host='0.0.0.0', port=port)
