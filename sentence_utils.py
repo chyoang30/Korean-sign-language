@@ -15,7 +15,7 @@ def extract_gloss_from_video(file):
         file_bytes = file.read()  # 먼저 파일 내용을 읽고
         files = {'file': (file.filename, file_bytes, file.mimetype)}
 
-        resp = requests.post(f"{NGROK_URL}/upload", files=files)
+        resp = requests.post(" https://d354-218-150-183-121.ngrok-free.app/upload", files=files)
         result = resp.json()
         print(f"[DEBUG] gloss_result: {result}")
 
