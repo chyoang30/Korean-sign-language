@@ -15,6 +15,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 from PIL import Image
+from sentence_utils import extract_gloss_from_video, gloss_to_sentence
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -196,28 +197,32 @@ def upload_proxy():
     except Exception as e:
         return jsonify({"error": f"로컬 추론 서버 호출 실패: {e}"}), 500
 
+@app.route("/generate_sentence", methods=["POST"])
+def generate_sentence():
+    if 'file' not in request.files:
+        return jsonify({"error": "영상 파일이 필요합니다."}), 400
 
-# 프론트에서 요청한 문장을 GLOSS로 변환하고, 해당 GLOSS를 영상으로 변환하는 API
-# 실제 앱에서는 이 API를 사용하여 사용자가 입력한 문장을 GLOSS로 변환하고, 그 GLOSS를 기반으로 영상을 생성합니다.
-# from gloss_utils import convert_sentence_to_gloss, generate_video_from_gloss
+    file = request.files['file']
 
-# @app.route("/generate_video", methods=["POST"])
-# def generate_video():
-#     data = request.get_json()
-#     sentence = data.get("sentence")
+    # 1단계: 영상 → GLOSS
+    gloss_result = extract_gloss_from_video(file)
+    if "error" in gloss_result:
+        return jsonify({"error": gloss_result["error"]}), 500
 
-#     if not sentence or not isinstance(sentence, str):
-#         return {'error': 'sentence는 문자열이어야 합니다.'}, 400
-    
-#     try:
-#         # GLOSS 변환
-#         gloss = convert_sentence_to_gloss(sentence, client)
+    gloss = gloss_result.get("gloss")
+    if not gloss:
+        return jsonify({"error": "GLOSS 추출 실패"}), 500
 
-#         # GLOSS를 영상으로 변환
-#         video_path = generate_video_from_gloss(gloss, word_to_file, VIDEO_FOLDER)
-#         return send_file(video_path, mimetype='video/mp4')
-#     except Exception as e:
-#         return {'error': str(e)}, 500
+    # 2단계: GLOSS → 문장
+    sentence_result = gloss_to_sentence(gloss)
+    if "error" in sentence_result:
+        return jsonify({"error": sentence_result["error"]}), 500
+
+    return jsonify({
+        "gloss": gloss,
+        "sentence": sentence_result["sentence"]
+    })
+
 
 
 if __name__ == "__main__":
