@@ -181,8 +181,6 @@ def to_gloss():
         return {'error': str(e)}, 500
 
 
-import requests
-
 @app.route("/upload", methods=["POST"])
 def upload_proxy():
     if 'file' not in request.files:
@@ -193,15 +191,38 @@ def upload_proxy():
 
     try:
         # ngrok 주소 사용
-        resp = requests.post("https://d6a4-210-96-144-146.ngrok-free.app/upload", files=files)
+        resp = requests.post("https://d95a-203-255-221-70.ngrok-free.app/upload", files=files)
         return jsonify(resp.json())
     except Exception as e:
         return jsonify({"error": f"로컬 추론 서버 호출 실패: {e}"}), 500
 
 
-# if __name__ == "__main__":    # 로컬 테스트용
-#     app.run(debug=True)
+# 프론트에서 요청한 문장을 GLOSS로 변환하고, 해당 GLOSS를 영상으로 변환하는 API
+# 실제 앱에서는 이 API를 사용하여 사용자가 입력한 문장을 GLOSS로 변환하고, 그 GLOSS를 기반으로 영상을 생성합니다.
+# from gloss_utils import convert_sentence_to_gloss, generate_video_from_gloss
 
-if __name__ == '__main__':  # 배포용
-    port = int(os.environ.get('PORT', 5000))  # 기본값 5000, 환경변수 우선
-    app.run(debug=False, host='0.0.0.0', port=port)
+# @app.route("/generate_video", methods=["POST"])
+# def generate_video():
+#     data = request.get_json()
+#     sentence = data.get("sentence")
+
+#     if not sentence or not isinstance(sentence, str):
+#         return {'error': 'sentence는 문자열이어야 합니다.'}, 400
+    
+#     try:
+#         # GLOSS 변환
+#         gloss = convert_sentence_to_gloss(sentence, client)
+
+#         # GLOSS를 영상으로 변환
+#         video_path = generate_video_from_gloss(gloss, word_to_file, VIDEO_FOLDER)
+#         return send_file(video_path, mimetype='video/mp4')
+#     except Exception as e:
+#         return {'error': str(e)}, 500
+
+
+if __name__ == "__main__":    # 로컬 테스트용
+    app.run(debug=True)
+
+# if __name__ == '__main__':  # 배포용
+#     port = int(os.environ.get('PORT', 5000))  # 기본값 5000, 환경변수 우선
+#     app.run(debug=False, host='0.0.0.0', port=port)
