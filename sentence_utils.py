@@ -16,14 +16,14 @@ def extract_gloss_from_video(file):     # /upload 역할을 수행하는 함수
         resp = requests.post("https://d354-218-150-183-121.ngrok-free.app/upload", files=files)
         result = resp.json()
 
-        print(f"[DEBUG] gloss_result: {result}")  
+        print("="*20 +"[DEBUG] gloss_result: ", {result})  
 
         # 키가 "result"일 수도 있으니 대비
         gloss = result.get("gloss") or result.get("result")
         if gloss:
             return {"gloss": gloss}
         else:
-            return {"error": "GLOSS 추출 결과가 없습니다."}
+            return {"error": "GLOSS extraction failed."}
         
     except Exception as e:
         return {"error": f"로컬 추론 서버 호출 실패: {e}"}
