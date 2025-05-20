@@ -10,23 +10,23 @@ from openai import OpenAI
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def extract_gloss_from_video(file):     # /upload 역할을 수행하는 함수
-    files = {'file': (file.filename, file.stream, file.mimetype)}
+def extract_gloss_from_video(file):
     try:
-        resp = requests.post("https://d354-218-150-183-121.ngrok-free.app/upload", files=files)
+        file_bytes = file.read()  # 먼저 파일 내용을 읽고
+        files = {'file': (file.filename, file_bytes, file.mimetype)}
+
+        resp = requests.post(f"{NGROK_URL}/upload", files=files)
         result = resp.json()
+        print(f"[DEBUG] gloss_result: {result}")
 
-        print("="*20 +"[DEBUG] gloss_result: ", {result})  
-
-        # 키가 "result"일 수도 있으니 대비
         gloss = result.get("gloss") or result.get("result")
         if gloss:
             return {"gloss": gloss}
         else:
-            return {"error": "GLOSS extraction failed."}
-        
+            return {"error": "GLOSS 추출 결과가 없습니다."}
     except Exception as e:
         return {"error": f"로컬 추론 서버 호출 실패: {e}"}
+
 
 def gloss_to_sentence(gloss_list):      # /to_speech 역할을 수행하는 함수
     if not gloss_list or not isinstance(gloss_list, list):
