@@ -13,7 +13,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 def extract_gloss_from_video(file):     # /upload 역할을 수행하는 함수
     files = {'file': (file.filename, file.stream, file.mimetype)}
     try:
-        resp = requests.post("https://d354-218-150-183-121.ngrok-free.app/upload", files=files)
+        resp = requests.post("https://5420-218-150-183-121.ngrok-free.app/upload", files=files)
         return resp.json()
     except Exception as e:
         return {"error": f"로컬 추론 서버 호출 실패: {e}"}
