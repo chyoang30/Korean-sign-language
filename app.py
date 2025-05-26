@@ -146,7 +146,7 @@ def to_speech():
     except Exception as e:
         return {'error': str(e)}, 500
 
-@app.route('/to_gloss', methods=['POST'])  # 구어 >> GLOSS
+@app.route('/to_gloss', methods=['POST'])  # 구어 >> GLOSS 자르기
 def to_gloss():
     data = request.get_json()
     sentence = data.get('sentence')  # 예: "화장실이 어디예요?"
